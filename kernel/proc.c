@@ -144,6 +144,7 @@ freeproc(struct proc *p)
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
+  p->trace_mask = 0;
   p->parent = 0;
   p->name[0] = 0;
   p->chan = 0;
@@ -227,7 +228,7 @@ userinit(void)
 
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
-
+  p->trace_mask = 0;
   p->state = RUNNABLE;
 
   release(&p->lock);
@@ -276,6 +277,7 @@ fork(void)
   np->sz = p->sz;
 
   np->parent = p;
+  np->trace_mask = p->trace_mask;
 
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
@@ -692,4 +694,15 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+uint64
+get_process_count(void)
+{
+  uint64 count = 0;
+  struct proc *p;
+  for (p = proc; p < &proc[NPROC]; p++) {
+    if (p->state != UNUSED) count++;
+  }
+  return count;
 }
