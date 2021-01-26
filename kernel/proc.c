@@ -121,6 +121,19 @@ found:
     return 0;
   }
 
+  // a user kernel page table identical to the existing global kernel page table
+  p->kernel_pagetable = proc_kvminit();
+
+  if (p->kernel_pagetable == 0) {
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+  // map the process's kstack
+  proc_kvmmap(p->kernel_pagetable,KSTACK((int) (p - proc)),kvmpa(KSTACK((int) (p - proc))), PGSIZE, PTE_R | PTE_W);
+  
+  
+
   // Set up new context to start executing at forkret,
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
@@ -141,7 +154,10 @@ freeproc(struct proc *p)
   p->trapframe = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
+  if(p->kernel_pagetable)
+    freewalk_proc(p->kernel_pagetable);
   p->pagetable = 0;
+  p->kernel_pagetable = 0;
   p->sz = 0;
   p->pid = 0;
   p->parent = 0;
@@ -220,6 +236,8 @@ userinit(void)
   // and data into it.
   uvminit(p->pagetable, initcode, sizeof(initcode));
   p->sz = PGSIZE;
+  // add mapping to its kernel page table
+  proc_kernel_uvmcopy(p->pagetable,p->kernel_pagetable,0,p->sz);
 
   // prepare for the very first "return" from kernel to user.
   p->trapframe->epc = 0;      // user program counter
@@ -238,17 +256,27 @@ userinit(void)
 int
 growproc(int n)
 {
+  printf("call sbrk\n");
   uint sz;
   struct proc *p = myproc();
-
   sz = p->sz;
   if(n > 0){
-    if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
+    // should not grow larger than PLIC
+    if(sz + n > PLIC || (sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
+      return -1;
+    }
+    // change to kernel page table
+    if (proc_kernel_uvmcopy(p->pagetable,p->kernel_pagetable,p->sz,sz) == -1) {
       return -1;
     }
   } else if(n < 0){
     sz = uvmdealloc(p->pagetable, sz, sz + n);
+    if (sz != p->sz) {
+      // change to kernel page table
+      uvmunmap(p->kernel_pagetable,PGROUNDUP(p->sz),(PGROUNDUP(sz) - PGROUNDUP(p->sz)) / PGSIZE,0);
+    }
   }
+  proc_kvminithart(p->kernel_pagetable);
   p->sz = sz;
   return 0;
 }
@@ -258,6 +286,7 @@ growproc(int n)
 int
 fork(void)
 {
+  printf("call fork\n");
   int i, pid;
   struct proc *np;
   struct proc *p = myproc();
@@ -273,7 +302,15 @@ fork(void)
     release(&np->lock);
     return -1;
   }
+
   np->sz = p->sz;
+
+  // Copy user memory mapping to child's kernel page table
+  if (proc_kernel_uvmcopy(np->pagetable,np->kernel_pagetable,0,np->sz) < 0) {
+    freeproc(np);
+    release(&np->lock);
+    return -1;
+  }
 
   np->parent = p;
 
@@ -473,10 +510,15 @@ scheduler(void)
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
+        // use process's own kernel page table
+        proc_kvminithart(p->kernel_pagetable);
+        //vmprint(p->kernel_pagetable);
         swtch(&c->context, &p->context);
 
         // Process is done running for now.
         // It should have changed its p->state before coming back.
+        // switch back to the global kernel page table
+        kvminithart();
         c->proc = 0;
 
         found = 1;

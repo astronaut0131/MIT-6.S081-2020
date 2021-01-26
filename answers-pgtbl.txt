@@ -1,0 +1,2 @@
+1. page0 is init's data and code, page1 is the guard page, page2 is init's stack.
+2. this test is used to avoid uint64 overflow, for example, srcva = 9223372036854775809 and len = 9223372036854775807 makes srcva+len overflow, and gives 0 as sum.

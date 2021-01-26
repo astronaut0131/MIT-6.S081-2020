@@ -12,6 +12,7 @@ static int loadseg(pde_t *pgdir, uint64 addr, struct inode *ip, uint offset, uin
 int
 exec(char *path, char **argv)
 {
+  printf("call exec\n");
   char *s, *last;
   int i, off;
   uint64 argc, sz = 0, sp, ustack[MAXARG+1], stackbase;
@@ -49,8 +50,10 @@ exec(char *path, char **argv)
     if(ph.vaddr + ph.memsz < ph.vaddr)
       goto bad;
     uint64 sz1;
+    printf("omg %p %p\n",ph.vaddr ,ph.memsz);
     if((sz1 = uvmalloc(pagetable, sz, ph.vaddr + ph.memsz)) == 0)
       goto bad;
+    printf("old size %p, new size %p\n",sz,sz1);
     sz = sz1;
     if(ph.vaddr % PGSIZE != 0)
       goto bad;
@@ -112,10 +115,19 @@ exec(char *path, char **argv)
   oldpagetable = p->pagetable;
   p->pagetable = pagetable;
   p->sz = sz;
+  // change to kernel page table
+  if (proc_kernel_uvmcopy(p->pagetable,p->kernel_pagetable,0,p->sz) == -1) {
+    goto bad;
+  }
+  proc_kvminithart(p->kernel_pagetable);
   p->trapframe->epc = elf.entry;  // initial program counter = main
   p->trapframe->sp = sp; // initial stack pointer
   proc_freepagetable(oldpagetable, oldsz);
 
+  // print out the first process's page table
+  if (p->pid == 1) {
+    vmprint(p->pagetable);
+  }
   return argc; // this ends up in a0, the first argument to main(argc, argv)
 
  bad:
