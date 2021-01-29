@@ -103,4 +103,10 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+  struct trapframe alarm_trap; // saved data before get into cron job
+  int alarm_interval;          // Process cron job interval
+  uint64 alarm_handler;        // Address to process cron job function
+  int is_signaled;             // Whether sys_sigalarm() is called
+  int is_alarm_working;        // 0 for alarm not working on process, 1 for alarm is working now
+  int ticks;                   // how many ticks have passed since the last call to a process's alarm handler
 };

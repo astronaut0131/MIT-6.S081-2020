@@ -77,8 +77,21 @@ usertrap(void)
     exit(-1);
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
+  if(which_dev == 2) {
+    if (!p->is_alarm_working && p->is_signaled) {
+      if (p->alarm_interval == p->ticks) {
+        p->ticks = 0;
+        // save content in trapframe
+        // and retrieve it when sys_sigreturn is called
+        p->alarm_trap = *p->trapframe;
+        p->trapframe->epc = (uint64) p->alarm_handler;
+        p->is_alarm_working = 1;
+      } else {
+        p->ticks++;
+      }
+    }
     yield();
+  }
 
   usertrapret();
 }
