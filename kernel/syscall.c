@@ -68,6 +68,10 @@ int
 argaddr(int n, uint64 *ip)
 {
   *ip = argraw(n);
+  if (is_valid_addr(myproc(),*ip)) {
+    // force allocating memory
+    lazy_uvmalloc(myproc()->pagetable,*ip);
+  }
   return 0;
 }
 

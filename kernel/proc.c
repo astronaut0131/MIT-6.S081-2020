@@ -240,17 +240,18 @@ growproc(int n)
 {
   uint sz;
   struct proc *p = myproc();
-
   sz = p->sz;
   if(n > 0){
-    if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
-      return -1;
-    }
+    sz = sz + n;
   } else if(n < 0){
     sz = uvmdealloc(p->pagetable, sz, sz + n);
   }
   p->sz = sz;
   return 0;
+}
+
+int is_valid_addr(struct proc* p,uint64 va) {
+  return va < p->sz && (va >= p->stackbase || va < p->stackbase - PGSIZE);
 }
 
 // Create a new process, copying the parent.
@@ -280,6 +281,8 @@ fork(void)
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
 
+  // copy stack base
+  np->stackbase = p->stackbase;
   // Cause fork to return 0 in the child.
   np->trapframe->a0 = 0;
 
