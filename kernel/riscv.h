@@ -224,12 +224,25 @@ r_scause()
   return x;
 }
 
+static inline int is_page_fault()
+{
+  return r_scause() == 13 || r_scause() == 15;
+}
+
 // Supervisor Trap Value
 static inline uint64
 r_stval()
 {
   uint64 x;
   asm volatile("csrr %0, stval" : "=r" (x) );
+  return x;
+}
+
+static inline uint64
+r_fp()
+{
+  uint64 x;
+  asm volatile("mv %0, s0" : "=r" (x) );
   return x;
 }
 
@@ -331,6 +344,7 @@ sfence_vma()
 #define PTE_W (1L << 2)
 #define PTE_X (1L << 3)
 #define PTE_U (1L << 4) // 1 -> user can access
+#define PTE_COW (1L << 8) // 1 -> this is a COW PTE
 
 // shift a physical address to the right place for a PTE.
 #define PA2PTE(pa) ((((uint64)pa) >> 12) << 10)

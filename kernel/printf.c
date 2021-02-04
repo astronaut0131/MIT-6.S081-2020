@@ -118,6 +118,7 @@ void
 panic(char *s)
 {
   pr.locking = 0;
+  backtrace();
   printf("panic: ");
   printf(s);
   printf("\n");
@@ -131,4 +132,40 @@ printfinit(void)
 {
   initlock(&pr.lock, "pr");
   pr.locking = 1;
+}
+
+// helper function
+static void vmprint_helper(pagetable_t pagetable,int depth) {
+  for(int i = 0; i < 512; i++){
+    pte_t pte = pagetable[i];
+    if(pte & PTE_V) {
+      for (int i = 0; i < depth; i++) {
+        if (i != 0) printf(" ");
+        printf("..");
+      }
+      // this PTE points to a lower-level page table.
+      uint64 child = PTE2PA(pte);
+      printf("%d: pte %p pa %p ref_cnt %d\n",i,pte,child,get_ref(child));
+      // stop recursion if this is the last level page table entry
+      if ((pte & (PTE_R|PTE_W|PTE_X)) == 0)
+        vmprint_helper((pagetable_t)child,depth+1);
+    }
+  }
+}
+
+// prints the contents of pagetable.
+void
+vmprint(pagetable_t pagetable) {
+  printf("page table %p\n", pagetable);
+  vmprint_helper(pagetable,1);
+}
+
+void backtrace() {
+  uint64 fp = r_fp();
+  uint64 stack_top = PGROUNDUP(fp);
+  while (1) {
+    if (fp == stack_top) break;
+    printf("%p\n",*(uint64*)(fp - 8));
+    fp = *(uint64*)(fp - 16);
+  }
 }
