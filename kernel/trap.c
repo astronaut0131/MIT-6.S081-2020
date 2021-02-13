@@ -168,6 +168,13 @@ clockintr()
   release(&tickslock);
 }
 
+uint get_ticks() {
+  uint res;
+  acquire(&tickslock);
+  res = ticks;
+  release(&tickslock);
+  return res;
+}
 // check if it's an external interrupt or software interrupt,
 // and handle it.
 // returns 2 if timer interrupt,

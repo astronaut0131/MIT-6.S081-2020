@@ -84,6 +84,7 @@ int             pipewrite(struct pipe*, uint64, int);
 void            printf(char*, ...);
 void            panic(char*) __attribute__((noreturn));
 void            printfinit(void);
+void            backtrace();
 
 // proc.c
 int             cpuid(void);
@@ -152,6 +153,7 @@ void            trapinit(void);
 void            trapinithart(void);
 extern struct spinlock tickslock;
 void            usertrapret(void);
+uint            get_ticks();
 
 // uart.c
 void            uartinit(void);
