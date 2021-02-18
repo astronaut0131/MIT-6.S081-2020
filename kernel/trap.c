@@ -37,7 +37,7 @@ void
 usertrap(void)
 {
   int which_dev = 0;
-
+  int slot = -1;
   if((r_sstatus() & SSTATUS_SPP) != 0)
     panic("usertrap: not from user mode");
 
@@ -68,11 +68,26 @@ usertrap(void)
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
+    if (r_scause() == 13 || r_scause() == 15) {
+
+      for (int i = 0; i < 16; i++) {
+        if (p->vmas[i].addr != 0 && r_stval() >= p->vmas[i].addr 
+        && r_stval() < p->vmas[i].addr + p->vmas[i].length) {
+          slot = i;
+          break;
+        }
+      }
+      if (slot != -1 && mmap_alloc(p->pagetable,PGROUNDDOWN(r_stval()),
+      get_inode(p->vmas[slot].mfile),PGROUNDDOWN(r_stval())-p->vmas[slot].addr,p->vmas[slot].prot) == 0
+      ) {
+        goto page_fault_ok;
+      }
+    }
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     p->killed = 1;
   }
-
+page_fault_ok:
   if(p->killed)
     exit(-1);
 

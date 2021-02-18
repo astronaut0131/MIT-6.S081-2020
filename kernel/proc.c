@@ -280,6 +280,12 @@ fork(void)
     release(&np->lock);
     return -1;
   }
+  for (int i = 0; i < 16; i++) {
+    np->vmas[i] = p->vmas[i];
+    if (np->vmas[i].addr != 0) {
+      filedup(np->vmas[i].mfile);
+    }
+  }
   np->sz = p->sz;
 
   np->parent = p;

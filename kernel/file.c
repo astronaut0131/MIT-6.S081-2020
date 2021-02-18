@@ -180,3 +180,14 @@ filewrite(struct file *f, uint64 addr, int n)
   return ret;
 }
 
+struct inode* get_inode(struct file* f) {
+  return f->ip;
+}
+
+void file_dec_ref(struct file* f) {
+  acquire(&ftable.lock);
+  if(f->ref < 1)
+    panic("file_dec_ref");
+  f->ref--;
+  release(&ftable.lock);
+}
