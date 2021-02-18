@@ -38,6 +38,8 @@ usertrap(void)
 {
   int which_dev = 0;
   int slot = -1;
+  struct vma* vma;
+  int index;
   if((r_sstatus() & SSTATUS_SPP) != 0)
     panic("usertrap: not from user mode");
 
@@ -70,17 +72,21 @@ usertrap(void)
   } else {
     if (r_scause() == 13 || r_scause() == 15) {
 
-      for (int i = 0; i < 16; i++) {
+      for (int i = 0; i < NVMA; i++) {
         if (p->vmas[i].addr != 0 && r_stval() >= p->vmas[i].addr 
         && r_stval() < p->vmas[i].addr + p->vmas[i].length) {
           slot = i;
           break;
         }
       }
-      if (slot != -1 && mmap_alloc(p->pagetable,PGROUNDDOWN(r_stval()),
-      get_inode(p->vmas[slot].mfile),PGROUNDDOWN(r_stval())-p->vmas[slot].addr,p->vmas[slot].prot) == 0
-      ) {
-        goto page_fault_ok;
+      if (slot != -1) {
+        vma = &p->vmas[slot];
+        index = (PGROUNDDOWN(r_stval()) - vma->addr)/PGSIZE;
+        if (vma->valid[index] && mmap_alloc(p->pagetable,PGROUNDDOWN(r_stval()),
+        get_inode(vma->mfile),PGROUNDDOWN(r_stval())-vma->addr,vma->prot) == 0
+        ) {
+          goto page_fault_ok;
+        }
       }
     }
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);

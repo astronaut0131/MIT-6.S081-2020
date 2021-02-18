@@ -89,6 +89,7 @@ struct vma {
   int prot;           // permission bits   readable/writable/both
   int flags;           // mmap flags        map_shared/map_private
   struct file* mfile; // mapped file
+  int valid[VMAMAXPGNUM];
 };
 
 // Per-process state
@@ -112,6 +113,6 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
-  struct vma vmas[16];
+  struct vma vmas[NVMA];
 };
 

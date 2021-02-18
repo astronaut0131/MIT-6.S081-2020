@@ -494,13 +494,16 @@ uint64 sys_mmap(void)
   struct file* f;
   int empty = -1;
   int perm = 0;
+  struct vma* vma;
   // retrieve arguments
   if (argaddr(1,&length) < 0 || argint(2,&prot) < 0 
    || argint(3,&flags) < 0 || argfd(4,0,&f) < 0) {
     return -1;
   }
+  // align length to PGSIZE
+  length = PGROUNDUP(length);
   // no free address space
-  if (myproc()->sz + length > MAXVA) {
+  if (myproc()->sz + length > MAXVA || length > (MAXFILE * BSIZE)) {
     return -1;
   }
   if (f->ref < 1) {
@@ -509,8 +512,8 @@ uint64 sys_mmap(void)
   // increase f reference, in case user close f later
   filedup(f);
   // find an empty slot
-  for (int i = 0; i < 16; i++) {
-    if (myproc()->vmas[i].addr == 0) {
+  for (int i = 0; i < NVMA; i++) {
+    if (myproc()->vmas[i].length == 0) {
       empty = i;
       break;
     }
@@ -522,22 +525,26 @@ uint64 sys_mmap(void)
     perm |= PTE_R;
   }
   if (prot & PROT_WRITE) {
-    if ((flags & MAP_SHARED) && !f->writable) return -1;
+    if (!(flags & MAP_PRIVATE) && !f->writable) return -1;
     perm |= PTE_W;
   }
   if (prot & PROT_EXEC) {
     perm |= PTE_X;
   }
-  // align length to PGSIZE
-  length = PGROUNDUP(length);
   // update vma
-  myproc()->vmas[empty].addr = myproc()->sz;
-  myproc()->vmas[empty].length = length;
-  myproc()->vmas[empty].prot = perm;
-  myproc()->vmas[empty].flags = flags;
-  myproc()->vmas[empty].mfile = f;
+  vma = &myproc()->vmas[empty];
+  vma->addr = myproc()->sz;
+  vma->length = length;
+  vma->prot = perm;
+  vma->flags = flags;
+  vma->mfile = f;
+  memset(vma->valid,0,sizeof vma->valid);
+  // mark mmaped pages as valid
+  for (int i = 0; i < length/PGSIZE; i++) {
+    vma->valid[i] = 1;
+  }
   myproc()->sz += length;
-  return myproc()->vmas[empty].addr;
+  return vma->addr;
 }
 
 uint64 sys_munmap(void)
@@ -551,6 +558,7 @@ uint64 sys_munmap(void)
   struct inode* ip;
   struct vma* vma;
   int slot = -1;
+  int all_unmapped = 1;
   if (argaddr(0,&addr) < 0 || argaddr(1,&length) < 0) {
     return -1;
   }
@@ -558,7 +566,7 @@ uint64 sys_munmap(void)
   addr = PGROUNDDOWN(addr);
   length = PGROUNDUP(length);
   // find the vma slot
-  for (int i = 0; i < 16; i++) {
+  for (int i = 0; i < NVMA; i++) {
     if (addr >= myproc()->vmas[i].addr && addr < myproc()->vmas[i].addr + myproc()->vmas[i].length) {
       slot = i;
       break;
@@ -590,9 +598,19 @@ uint64 sys_munmap(void)
   }
   // unmap pages
   uvmunmap(myproc()->pagetable,addr,npages,1);
-  // munmap all the pages in vma
-  // decrease f ref and free vma 
-  if (addr == vma->addr && length == vma->length) {
+  // set the pages to be invalid
+  for (int i = 0; i < npages; i++) {
+    vma->valid[(addr - vma->addr)/PGSIZE + i] = 0;
+  }
+  for (int i = 0; i < VMAMAXPGNUM; i++) {
+    if (vma->valid[i]) {
+      all_unmapped = 0;
+      break;
+    }
+  }
+  // all the page has been munmaped
+  if (all_unmapped)
+  {
     file_dec_ref(vma->mfile);
     memset(vma,0,sizeof(*vma));
   }
