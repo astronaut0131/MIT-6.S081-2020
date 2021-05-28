@@ -273,7 +273,7 @@ growproc(int n)
     sz = uvmdealloc(p->pagetable, sz, sz + n);
     if (sz != p->sz) {
       // change to kernel page table
-      uvmunmap(p->kernel_pagetable,PGROUNDUP(p->sz),(PGROUNDUP(sz) - PGROUNDUP(p->sz)) / PGSIZE,0);
+      uvmunmap(p->kernel_pagetable,PGROUNDUP(sz),(PGROUNDUP(p->sz) - PGROUNDUP(sz)) / PGSIZE,0);
     }
   }
   proc_kvminithart(p->kernel_pagetable);
